@@ -1,0 +1,7 @@
+.venv/
+.uv-cache/
+.tmp/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+registers/*.xlsx
