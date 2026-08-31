@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from io import BytesIO
 from pathlib import Path
+import tomllib
 
 import pandas as pd
 import pytest
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 
 from engine.io_excel import (
     PROVENANCE_TEXT,
@@ -280,3 +281,72 @@ def test_written_day_n_register_reproduces_day_n_plus_one_chain_statuses():
     assert from_uploaded_previous.findings == in_memory["2026-08-26"].findings
     assert from_uploaded_previous.resolved == in_memory["2026-08-26"].resolved
     assert from_uploaded_previous.summary == in_memory["2026-08-26"].summary
+
+
+def test_upload_without_previous_register_marks_every_finding_new():
+    req_path, pos_path = workbook_paths("2026-08-26")
+    result = reconcile_workbooks(req_path, pos_path, CONFIG_PATH, "2026-08-26")
+
+    assert result.summary["exceptions"] == 3
+    assert result.summary["new"] == 3
+    assert result.summary["recurring"] == 0
+    assert result.resolved == ()
+    assert {finding["Status"] for finding in result.findings} == {"New"}
+
+
+def test_uploaded_config_changes_confirmed_pairs_without_code_change():
+    workbook = load_workbook(CONFIG_PATH)
+    field_map = workbook["FieldMap"]
+    headers = {cell.value: cell.column for cell in field_map[1]}
+    for row in range(2, field_map.max_row + 1):
+        if field_map.cell(row=row, column=headers["req_col"]).value == "FBS Function":
+            field_map.cell(row=row, column=headers["status"]).value = "pending"
+            break
+    uploaded_config = BytesIO()
+    workbook.save(uploaded_config)
+    uploaded_config.seek(0)
+
+    req_path, pos_path = workbook_paths("2026-08-26")
+    result = reconcile_workbooks(
+        req_path,
+        pos_path,
+        uploaded_config,
+        "2026-08-26",
+    )
+
+    assert result.summary["pairs_checked"] == 12
+    assert result.summary["exceptions"] == 2
+    assert {finding["Requisition No"] for finding in result.findings} == {"101140", "101144"}
+
+
+def test_upload_previous_register_missing_required_sheet_fails_loudly():
+    invalid_previous = BytesIO()
+    workbook = Workbook()
+    workbook.active.title = "Not_A_Register"
+    workbook.save(invalid_previous)
+    invalid_previous.seek(0)
+    req_path, pos_path = workbook_paths("2026-08-26")
+
+    with pytest.raises(ValueError) as caught:
+        reconcile_workbooks(
+            req_path,
+            pos_path,
+            CONFIG_PATH,
+            "2026-08-26",
+            invalid_previous,
+        )
+
+    assert str(caught.value) == "Previous register missing required sheet: Mismatch_Register"
+
+
+def test_streamlit_theme_matches_contract_exactly():
+    with (ROOT / ".streamlit" / "config.toml").open("rb") as theme_file:
+        theme = tomllib.load(theme_file)["theme"]
+
+    assert theme == {
+        "base": "dark",
+        "primaryColor": "#FFAD28",
+        "backgroundColor": "#181C23",
+        "secondaryBackgroundColor": "#282A27",
+        "textColor": "#FFFFFF",
+    }
