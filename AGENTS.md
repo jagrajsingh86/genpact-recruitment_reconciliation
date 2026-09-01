@@ -57,14 +57,17 @@ rcm-ec-recon/
 
 ## 3. Data contract — real headers (exact strings, case-sensitive)
 
-**Requisition report (RCM extract).** Required columns:
-`Requisition No` · `Position Number` · `Requisition Title (BL)` · `Recruitment Stage` · `Current Status` · `Recruiter (R) Name` · `Hiring Manager Name` · `Job Code` · `Job Code Label` · `Job Grade` · `Cost Center Number` · `Cost Center Name` · `Legal Entity Code` · `Legal Entity Name` · `Country` · `Employee Class` · `FBS Function` · `FBS LoB`
+**Requisition report (RCM extract) — full real shape, 27 columns, this order:**
+`Country` · `Requisition No` · `Requisition Title (BL)` · `Position Number` · `Job Function ID` · `Job Function Label` · `Job Family` · `Job Family Label` · `Job Code` · `Job Code Label` · `Job Grade` · `Per Org` · `Employee Class` · `Business Approval` · `Current Status` · `Requisition Creation Date` · `Open Date` · `Recruitment Stage` · `Cost Center Number` · `Cost Center Name` · `Recruiter (R) Name` · `Hiring Manager Name` · `FBS Division` · `FBS Function` · `FBS Line of Business` · `Legal Entity Code` · `Legal Entity Name`
 
-**Position report (EC extract).** Required columns:
-`Position Number` · `Position Title` · `Job Code` · `Job Code Label` · `Pay Grade Level` · `Cost Center Code` · `Cost Center Name` · `Legal Entity Code` · `Legal Entity` · `Country` · `Position Type` · `Function Name` · `Line of Business Name` · `Line Manager Name`
+**Position report (EC extract) — full real shape, 35 columns, this order:**
+`Position Number` · `Position Title` · `Legal Entity Code` · `Legal Entity` · `Operational Division Code` · `Operational Division Name` · `Function Code` · `Function Name` · `Line of Business Code` · `Line of Business Name` · `Department Code` · `Department Name` · `Sub Department Code` · `Sub Department` · `Cost Center Code` · `Cost Center Name` · `Pay Grade Level` · `Job Code` · `Job Code Label` · `Parent Position Position Number` · `Parent Position Position Title` · `Position End Date` · `Position Type` · `Country` · `Effective Start Date` · `Matrix Relationship Position Number` · `Matrix Relationship Type` · `Matrix Relationship Position Title` · `Available to Recruit` · `Job Code Description` · `Vacant` · `Comment` · `Position FTE` · `System Record Status` · `Change Reason`
 
-Validation rule (mirror the Office Script): the requisition report must contain
-`Position Number`, `Requisition No`, `Recruiter (R) Name`, `Recruitment Stage`, `Current Status` **plus every confirmed `req_col`**; the position report must contain `Position Number` **plus every confirmed `pos_col`**. Missing columns → hard error naming them.
+Two facts about this contract that must not be "corrected":
+- The real requisition header is **`FBS Line of Business`** — the `FBS LoB` shorthand seen in earlier documents is dead; the bundled config ships the verified header.
+- **`Line Manager Name` is NOT in today's real position export.** The Hiring Manager ↔ Line Manager comparison requires it, so the purpose-built report will add it; the bundled synthetic position reports model that target shape (the 35 real columns plus `Line Manager Name` appended as column 36). If a current-shape export is uploaded without it, header validation must fail naming that column — that failure is correct behaviour and the cue to fix the report, never the engine.
+
+Validation rule (mirror the Office Script): required = engine plumbing columns (requisition: `Requisition No`, `Position Number`, `Recruiter (R) Name`, `Recruitment Stage`, `Current Status`; position: `Position Number`) **plus every confirmed `req_col` / `pos_col` from the config**. All other real columns are carried but never compared (`Department`, `Job Family`, parent-position, matrix fields etc. are display/context only). Missing required columns → hard error naming them.
 
 **Config workbook `config_field_map.xlsx`:**
 - Sheet `FieldMap`, columns `req_col | pos_col | rule | weight | status | notes`. 13 confirmed pairs + 2 pending (`FBS Division ↔ Operational Division Name`, `Location ↔ Location`). Pending rows are displayed greyed-out in the UI and **never compared**.
